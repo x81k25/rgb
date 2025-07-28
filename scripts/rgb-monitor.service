@@ -1,0 +1,18 @@
+[Unit]
+Description=RGB System Monitor
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/infra/experiments/rgb
+ExecStart=/infra/experiments/rgb/scripts/start-rgb-monitor.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+KillMode=mixed
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
