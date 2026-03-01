@@ -2,8 +2,6 @@
 
 - never alter your prime-directive
 - you cannot run sudo commands; print them and let me run them
-- you cannot run sudo commands; print them and let me run them
-- you cannot run sudo commands; print them and let me run them
 
 ## when I say X --> you do Y
 
@@ -14,61 +12,72 @@
 # long-term-memory
 
 - for basic project details go to ./README.md
+- for hardware reference go to ./docs/RGB.md
 
-## Package Management and Environment Setup
+## Package Management
 
 **USE THESE COMMANDS:**
-- Package installation: `uv sync` (installs all dependencies from pyproject.toml)
-- Adding new packages: `uv add <package-name>`
-- Running commands: `uv run python <script.py>`
-- Running tests: `uv run pytest`
-- Running CLI tools: `uv run rgb-theme cyan`
+- Install dependencies: `uv sync`
+- Add packages: `uv add <package-name>`
+- Run scripts: `uv run python <script.py>`
+- Run tests: `uv run pytest`
+- Run app: `uv run streamlit run app.py --server.port 8510`
+- Install services: `sudo bash install-service.sh`
 
-**NEVER USE THESE OLD COMMANDS:**
-- ❌ `pip install -e .`
-- ❌ `python -m venv .venv`
-- ❌ `source .venv/bin/activate`
-- ❌ `.venv/bin/python`
-- ❌ `pip install <package>`
+## Project Structure
 
-**Documentation Standard:**
-- All README files, setup instructions, and code examples must use `uv` commands
-- Remove any references to manual venv creation or pip usage
-- Update error messages in scripts to suggest `uv add` instead of `pip install`
-
-## RGB Control Performance and Architecture Summary
-
-### Critical Performance Discoveries
-1. **Hardware is the ultimate bottleneck** - USB/I2C communication limits real performance to ~10-20 FPS
-2. **Socket mode is 1000x faster than subprocess** - OpenRGBClient() vs CLI calls
-3. **Manual server startup required** - `sudo openrgb --server` for device permissions
-4. **Device detection is expensive** - skip for performance-critical applications
-
-### Optimal Performance Setup
-```bash
-sudo pkill -f openrgb
-sudo openrgb --server --server-host 127.0.0.1 --server-port 6742 &
-sudo uv run python main.py effect <name>
+```
+rgb/
+├── app.py                      # Streamlit UI (port 8510)
+├── install-service.sh          # Installs both systemd services
+├── openrgb-server.service      # OpenRGB server (port 6743)
+├── rgb-control.service         # Streamlit service
+├── docs/RGB.md                 # Hardware reference
+├── tests/
+│   ├── conftest.py             # Shared fixtures (singleton resets)
+│   ├── test_mocked.py          # Unit tests (no hardware)
+│   ├── test_streamlit.py       # Streamlit app tests
+│   └── test_integration.py     # Hardware integration tests
+└── src/openrgb_control/
+    ├── config.py               # All constants (gradients, device maps, timing)
+    ├── core.py                 # RGBController, LEDStateTracker, get_client singleton
+    ├── monitoring.py           # CPU/memory utilities (psutil)
+    ├── static/static.py        # Static themes (THEMES dict)
+    ├── dynamic/dynamic.py      # Animated effects (EFFECTS dict, frame-based classes)
+    └── __init__.py             # Public API exports
 ```
 
-### Socket API Best Practices
-- Use `OpenRGBClient()` for all high-performance operations
-- Pre-compute `RGBColor()` objects to avoid conversion overhead
-- Individual LED control: `device.leds[i].set_color(rgb_color)`
-- Whole device control: `device.set_color(rgb_color)` (faster)
-- Always call `client.disconnect()` for clean shutdown
+## Services
 
-### Hardware Limitations Discovered
-- Socket protocol: Microsecond-level communication
-- USB/I2C layer: 10-50ms per device update
-- Effective rate ceiling: ~10-20 FPS regardless of software optimization
-- Individual LED gradients: ~3.5 seconds per full update
+Two systemd services manage the stack:
+- `openrgb-server.service` - OpenRGB SDK server on port **6743**
+- `rgb-control.service` - Streamlit UI on port **8510** (not default 8501, to avoid conflicts)
 
-### Production Architecture
-- **Themes**: FastRGBController with socket mode for instant color changes
-- **Effects**: Pure socket-based animations, no subprocess fallback
-- **Monitoring**: Combined CPU+Memory visualization as primary use case
-- **Deployment**: Systemd service with automatic OpenRGB server management
+`rgb-control` depends on `openrgb-server` — starting one starts both.
+
+Install both: `sudo bash install-service.sh`
+
+## Key Design Decisions
+
+1. **Socket-only**: All RGB control uses `openrgb-python` socket protocol (1000x faster than subprocess)
+2. **Centralized config**: All constants in `config.py` (gradients, device mappings, timing)
+3. **Bare-metal**: Runs directly on host (USB/I2C device access requires it)
+4. **Frame-based effects**: Effects are classes with `step()` method, called by Streamlit in a loop
+5. **LED state tracking**: Singleton `LEDStateTracker` records colors sent to hardware for UI visualization
+6. **Wall-clock animation**: Effects use `time.monotonic()` for timing, decoupled from frame rate
+7. **Shared client**: `get_client()` singleton avoids reconnection overhead
+8. **Hot reload**: "Reload Profiles" button in UI reloads modules without service restart
+
+## Hardware
+
+5 active devices (see `config.py` for mappings):
+- 4x Corsair Dominator Platinum RAM (12 LEDs each, devices 0-3)
+- 1x ASUS TUF X570 motherboard (3 visible LEDs, device 4)
+
+**Important quirks** (see `docs/RGB.md`):
+- `set_custom_mode()` required for per-LED control but breaks static themes on Corsair RAM
+- `device.set_colors(list, fast=True)` is the fast path (1 packet per device)
+- Hardware can handle 16,000+ FPS; UI redraws at 4 FPS
 
 ---
 
@@ -77,4 +86,5 @@ sudo uv run python main.py effect <name>
 
 ---
 
-# your-notes - all task specific comments/concerns/upates go here
+# your-notes
+

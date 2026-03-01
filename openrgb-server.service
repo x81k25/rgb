@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenRGB Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/openrgb --server --server-port 6743
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

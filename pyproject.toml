@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openrgb-control"
-version = "0.1.0"
-description = "Dynamic RGB lighting control for OpenRGB devices"
-readme = "RGB.md"
+version = "0.3.0"
+description = "Simple RGB lighting control for OpenRGB devices"
+readme = "README.md"
 authors = [
     {name = "RGB Control Team"}
 ]
@@ -14,9 +14,9 @@ license = {text = "MIT"}
 requires-python = ">=3.8"
 dependencies = [
     "psutil>=5.8.0",
-    "requests>=2.25.0",
     "loguru>=0.7.0",
     "openrgb-python>=0.3.3",
+    "streamlit>=1.30.0",
 ]
 keywords = ["rgb", "lighting", "openrgb", "effects"]
 classifiers = [
@@ -32,18 +32,11 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: System :: Hardware",
-    "Topic :: Multimedia :: Graphics",
 ]
 
-[project.scripts]
-rgb-theme = "openrgb_control.cli:theme_main"
-rgb-effects = "openrgb_control.cli:effects_main"
-rgb-breathing-ripple = "openrgb_control.cli:breathing_ripple_main"
-
 [project.urls]
-Homepage = "https://infra.local/experiments/rgb"
-Repository = "https://infra.local/experiments/rgb"
-Documentation = "https://infra.local/experiments/rgb/RGB.md"
+Homepage = "https://github.com/example/openrgb-control"
+Repository = "https://github.com/example/openrgb-control"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/openrgb_control"]
@@ -59,15 +52,12 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--tb=short",
+addopts = ["-v", "--tb=short"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
 ]
 
 [tool.hatch.build.targets.sdist]
-include = [
-    "/src",
-    "/tests",
-    "/RGB.md",
-    "/CLAUDE.md",
-]
+include = ["/src", "/tests", "/README.md"]

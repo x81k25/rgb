@@ -1,0 +1,16 @@
+[Unit]
+Description=RGB Control Streamlit App
+After=network.target openrgb-server.service
+Requires=openrgb-server.service
+
+[Service]
+Type=simple
+User=x81k25
+WorkingDirectory=/infra/experiments/rgb
+ExecStart=/home/x81k25/.local/bin/uv run streamlit run app.py --server.port 8510 --server.headless true --server.address 0.0.0.0
+Restart=on-failure
+RestartSec=5
+Environment=HOME=/home/x81k25
+
+[Install]
+WantedBy=multi-user.target

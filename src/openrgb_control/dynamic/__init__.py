@@ -1,23 +1,35 @@
 """Dynamic RGB lighting effects module."""
 
 from .dynamic import (
-    breathing_effect,
-    wave_effect,
-    rainbow_cycle,
-    pulse_effect,
-    breathing_ripple,
-    memory_usage_effect,
-    cpu_usage_effect,
-    contrast_cycle
+    EFFECTS,
+    SimpleBreathingEffect,
+    BreathingEffect,
+    ContrastCycleEffect,
+    RainbowCycleEffect,
+    PulseEffect,
+    CpuUsageEffect,
+    MemoryUsageEffect,
+    SystemMonitoringEffect,
+    BreathingMetricsEffect,
+    WaveEffect,
+    HeartbeatEffect,
+    OceanWaveEffect,
+    OceanBreathEffect,
 )
 
 __all__ = [
-    'breathing_effect',
-    'wave_effect', 
-    'rainbow_cycle',
-    'pulse_effect',
-    'breathing_ripple',
-    'memory_usage_effect',
-    'cpu_usage_effect',
-    'contrast_cycle'
+    "EFFECTS",
+    "SimpleBreathingEffect",
+    "BreathingEffect",
+    "ContrastCycleEffect",
+    "RainbowCycleEffect",
+    "PulseEffect",
+    "CpuUsageEffect",
+    "MemoryUsageEffect",
+    "SystemMonitoringEffect",
+    "BreathingMetricsEffect",
+    "WaveEffect",
+    "HeartbeatEffect",
+    "OceanWaveEffect",
+    "OceanBreathEffect",
 ]

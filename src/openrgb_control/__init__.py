@@ -1,27 +1,17 @@
-"""OpenRGB Control - Dynamic RGB lighting control for Linux."""
+"""OpenRGB Control - Simple RGB lighting control for Linux."""
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
-from .core import RGBController, RGBDevice
-from .dynamic import (
-    breathing_effect,
-    wave_effect,
-    rainbow_cycle,
-    pulse_effect,
-    breathing_ripple,
-    memory_usage_effect
-)
+from .core import RGBController, LEDStateTracker, get_client, hex_to_rgb, rgb_to_hex
 from .static import apply_theme, THEMES
+from .dynamic import EFFECTS
 
 __all__ = [
-    'RGBController',
-    'RGBDevice',
-    'breathing_effect',
-    'wave_effect',
-    'rainbow_cycle',
-    'pulse_effect',
-    'breathing_ripple',
-    'memory_usage_effect',
-    'apply_theme',
-    'THEMES'
+    "RGBController",
+    "LEDStateTracker",
+    "hex_to_rgb",
+    "rgb_to_hex",
+    "apply_theme",
+    "THEMES",
+    "EFFECTS",
 ]
