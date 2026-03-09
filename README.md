@@ -8,7 +8,8 @@ RGB lighting control for Linux using OpenRGB with a Streamlit web UI.
 - **Static themes**: Solid colors (cyan, blue, red, green, white, blackout) and gradients
 - **Per-stick effects**: Breathing, rainbow, pulse, wave, contrast — each stick phase-offset
 - **Per-LED effects**: Ocean wave and ocean breath with individual LED animation
-- **System monitoring**: CPU and memory usage visualization on RAM sticks
+- **Metrics**: CPU, memory, GPU usage/VRAM with blue/cyan/white intensity gradients
+- **YAML profiles**: All profile metadata in `config/` YAML files
 - **Hot reload**: Update effects without restarting the service
 
 ## Quick Start
@@ -60,13 +61,17 @@ uv run streamlit run app.py --server.port 8510
 | `ocean-wave` | Blue-cyan wave animating per LED |
 | `ocean-breath` | Gentle ocean breathing gradient per LED |
 
-### System Monitor
+### Metrics
 | Effect | Description |
 |--------|-------------|
 | `cpu` | CPU usage on all RAM sticks |
 | `memory` | Memory usage on all RAM sticks |
+| `gpu` / `gpu1` | GPU 0/1 usage on all RAM sticks |
+| `gpu-vram` / `gpu1-vram` | GPU 0/1 VRAM usage on all RAM sticks |
 | `system` | CPU (right sticks) + Memory (left sticks) |
 | `breathing-metrics` | Heartbeat overlay on CPU + Memory |
+| `combo` | CPU (cyan) + Memory (blue) + GPU usage/VRAM (cyan/blue/white) |
+| `metrics-test` | Deterministic test pattern: overlap, ramp, random per stick |
 
 ## Hardware
 
@@ -99,3 +104,5 @@ uv run streamlit run app.py --server.port 8510
 - `psutil`: System monitoring
 - `streamlit`: Web UI
 - `loguru`: Logging
+- `pyyaml`: Profile YAML parsing
+- `nvidia-ml-py`: GPU monitoring via NVML

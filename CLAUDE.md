@@ -36,6 +36,11 @@ rgb/
 ├── rgb-daemon.service          # RGB daemon (effect engine)
 ├── rgb-control.service         # Streamlit service
 ├── docs/RGB.md                 # Hardware reference
+├── config/
+│   ├── profiles-static.yaml        # Static theme definitions
+│   ├── profiles-dynamic-stick.yaml # Per-Stick effect metadata
+│   ├── profiles-dynamic-led.yaml   # Per-LED effect metadata
+│   └── profiles-metrics.yaml       # Metrics effect metadata
 ├── tests/
 │   ├── conftest.py             # Shared fixtures (singleton resets)
 │   ├── test_mocked.py          # Unit tests (no hardware)
@@ -47,8 +52,8 @@ rgb/
     ├── daemon.py               # RGBDaemon class (effect loop, command dispatch)
     ├── ipc.py                  # JSON file IPC (command.json, state.json in /tmp/rgb-daemon/)
     ├── monitoring.py           # CPU/memory/GPU utilities (psutil, nvidia-ml-py)
-    ├── static/static.py        # Static themes (THEMES dict)
-    ├── dynamic/dynamic.py      # Animated effects (EFFECTS dict, frame-based classes)
+    ├── static/static.py        # Static themes (loaded from YAML)
+    ├── dynamic/dynamic.py      # Animated effects (loaded from YAML, frame-based classes)
     └── __init__.py             # Public API exports
 ```
 
