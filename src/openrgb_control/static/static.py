@@ -1,7 +1,9 @@
 """Static RGB color themes."""
 
+import os
+import yaml
+
 from ..core import RGBController, LEDStateTracker, hex_to_rgb, OPENRGB_AVAILABLE
-from ..config import STATUS_GRADIENT_HEX
 
 try:
     from loguru import logger
@@ -15,37 +17,17 @@ except ImportError:
     RGBColor = None
 
 
-THEMES = {
-    "cyan": {
-        "color": "00FFFF",
-        "description": "Solid cyan for all devices"
-    },
-    "blue": {
-        "color": "0000FF",
-        "description": "Solid blue for all devices"
-    },
-    "red": {
-        "color": "FF0000",
-        "description": "Solid red for all devices"
-    },
-    "green": {
-        "color": "00FF00",
-        "description": "Solid green for all devices"
-    },
-    "white": {
-        "color": "FFFFFF",
-        "description": "Solid white for all devices"
-    },
-    "status-gradient": {
-        "type": "gradient",
-        "colors": STATUS_GRADIENT_HEX,
-        "description": "Status gradient: cyan (bottom) to red (top)"
-    },
-    "blackout": {
-        "color": "000000",
-        "description": "All lights off"
-    }
-}
+def _load_themes() -> dict:
+    """Load static theme definitions from config/profiles-static.yaml."""
+    # Project root is 3 levels up: static/ -> openrgb_control/ -> src/ -> rgb/
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    yaml_path = os.path.join(project_root, "config", "profiles-static.yaml")
+    with open(yaml_path, "r") as f:
+        profiles = yaml.safe_load(f)
+    return profiles.get("profiles", {})
+
+
+THEMES = _load_themes()
 
 
 def apply_theme(theme_name: str) -> None:

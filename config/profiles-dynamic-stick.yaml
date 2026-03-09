@@ -1,0 +1,38 @@
+# Per-Stick dynamic effects — animate entire sticks with one color each.
+# class: Python class name in dynamic.py (resolved at load time)
+profiles:
+  simple-breathing:
+    description: Solid blue fade in/out (all sticks together)
+    class: SimpleBreathingEffect
+    category: Per Stick
+    speed_toggleable: true
+
+  breathing:
+    description: "Cyan fade rolling L\u2192R across sticks"
+    class: BreathingEffect
+    category: Per Stick
+    speed_toggleable: true
+
+  contrast:
+    description: High contrast color cycling
+    class: ContrastCycleEffect
+    category: Per Stick
+    speed_toggleable: true
+
+  rainbow:
+    description: Color spectrum cycle
+    class: RainbowCycleEffect
+    category: Per Stick
+    speed_toggleable: true
+
+  pulse:
+    description: Pulsing brightness effect
+    class: PulseEffect
+    category: Per Stick
+    speed_toggleable: true
+
+  wave:
+    description: Color wave across devices
+    class: WaveEffect
+    category: Per Stick
+    speed_toggleable: true

@@ -22,7 +22,7 @@ from src.openrgb_control.config import (
 st.set_page_config(page_title="RGB Control", layout="wide")
 
 # Ordered category list for display
-CATEGORY_ORDER = ["Per Stick", "Per LED", "System Monitor"]
+CATEGORY_ORDER = ["Per Stick", "Per LED", "Metrics"]
 
 
 def _load_profiles():
@@ -74,14 +74,20 @@ def render_devices(tracker: LEDStateTracker):
         leds = tracker.get_device_leds(device_idx)
 
         with cols[stick_pos]:
-            st.markdown(f"**Stick {stick_pos}**")
+            st.markdown(
+                f'<div style="text-align:center;font-weight:bold;margin-bottom:4px;">ram_{stick_pos}</div>',
+                unsafe_allow_html=True,
+            )
             for led_idx in range(LEDS_PER_RAM_STICK):
                 r, g, b = leds.get(led_idx, (0, 0, 0))
                 _render_led_block(f"LED {led_idx}", r, g, b)
 
             # Motherboard LEDs below stick 3
             if stick_pos == 3:
-                st.markdown("**Motherboard**")
+                st.markdown(
+                    '<div style="text-align:center;font-weight:bold;margin-top:8px;margin-bottom:4px;">mobo</div>',
+                    unsafe_allow_html=True,
+                )
                 for led_idx in range(MOTHERBOARD_VISIBLE_LEDS):
                     r, g, b = mb_leds.get(led_idx, (0, 0, 0))
                     _render_led_block(f"MB {led_idx}", r, g, b)
@@ -101,8 +107,6 @@ def _get_daemon_state():
 
 
 def main():
-    st.title("RGB Control")
-
     tracker = LEDStateTracker()
 
     # Read daemon state
@@ -113,93 +117,82 @@ def main():
     if daemon_leds:
         tracker.from_dict(daemon_leds)
 
-    # Sidebar controls
-    with st.sidebar:
-        st.header("Controls")
+    # --- Top: status indicators ---
+    if daemon_status == "offline":
+        st.warning("Daemon: offline")
+    elif daemon_status == "running":
+        st.success(f"Daemon: running — {daemon_effect}")
+    elif daemon_status == "stopped":
+        st.info("Daemon: stopped")
+    else:
+        st.info(f"Daemon: {daemon_status}")
 
-        # Daemon status indicator
-        if daemon_status == "offline":
-            st.warning("Daemon: offline")
-        elif daemon_status == "running":
-            st.success(f"Daemon: running — {daemon_effect}")
-        elif daemon_status == "stopped":
-            st.info("Daemon: stopped")
-        else:
-            st.info(f"Daemon: {daemon_status}")
+    # --- Middle: LED visualization ---
+    render_devices(tracker)
 
-        mode = st.radio("Mode", ["Static", "Per Stick", "Per LED", "System Monitor"])
+    # --- Bottom: controls ---
+    st.divider()
 
+    ctrl_left, ctrl_right = st.columns(2)
+
+    with ctrl_right:
+        mode = st.selectbox("Mode", ["Static", "Per Stick", "Per LED", "Metrics"])
+
+    with ctrl_left:
         if mode == "Static":
-            st.caption("Apply a fixed color to all devices")
             theme_options = list(THEMES.keys())
-            selected_theme = st.selectbox(
-                "Theme",
-                theme_options,
-                format_func=lambda t: f"{t} - {THEMES[t]['description']}"
-            )
+            selected_theme = st.selectbox("Theme", theme_options, key="theme_select")
 
-            if st.button("Apply Theme", type="primary"):
+            # Auto-apply on selection change
+            if "prev_theme" not in st.session_state:
+                st.session_state.prev_theme = None
+            if selected_theme != st.session_state.prev_theme:
+                st.session_state.prev_theme = selected_theme
                 ipc.write_command("apply_theme", name=selected_theme)
-                st.success(f"Sent: apply {selected_theme}")
-                time.sleep(0.5)
-                st.rerun()
 
         elif mode in EFFECT_CATEGORIES:
             category_effects = EFFECT_CATEGORIES[mode]
 
-            if mode == "Per Stick":
-                st.caption("Animate entire sticks with one color each")
-            elif mode == "Per LED":
-                st.caption("Animate individual LEDs independently")
-            elif mode == "System Monitor":
-                st.caption("Visualize live CPU/memory usage on LEDs")
-
             effect_options = list(category_effects.keys())
-            selected_effect = st.selectbox(
-                "Effect",
-                effect_options,
-                format_func=lambda e: f"{e} - {category_effects[e]['description']}"
-            )
+            selected_effect = st.selectbox("Effect", effect_options, key="effect_select")
 
-            speed = st.slider("Speed", 0.1, 20.0, 4.0, 0.1,
-                              help="Animation cycle duration in seconds (lower = faster)")
+            effect_info = category_effects[selected_effect]
+            speed = 4.0
+            if effect_info.get("speed_toggleable", True):
+                speed = st.slider("Speed", 0.1, 20.0, 4.0, 0.1,
+                                  help="Animation cycle duration in seconds (lower = faster)")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Start", type="primary", disabled=daemon_running):
-                    ipc.write_command("start_effect", name=selected_effect, speed=speed)
-                    time.sleep(0.5)
-                    st.rerun()
-            with col2:
-                if st.button("Stop", disabled=not daemon_running):
-                    ipc.write_command("stop")
-                    time.sleep(0.5)
-                    st.rerun()
+            # Auto-start on selection change
+            if "prev_effect" not in st.session_state:
+                st.session_state.prev_effect = None
+            if selected_effect != st.session_state.prev_effect:
+                st.session_state.prev_effect = selected_effect
+                ipc.write_command("start_effect", name=selected_effect, speed=speed)
 
-        st.divider()
+            if st.button("Stop", disabled=not daemon_running):
+                ipc.write_command("stop")
+                st.session_state.prev_effect = None
+                time.sleep(0.5)
+                st.rerun()
+
+    st.divider()
+    col1, col2 = st.columns(2)
+    with col1:
         if st.button("Reload Profiles"):
             _reload_globals()
             st.success("Profiles reloaded")
             st.rerun()
-
+    with col2:
         if st.button("Blackout"):
             ipc.write_command("blackout")
             st.success("Sent: blackout")
             time.sleep(0.5)
             st.rerun()
 
-    # Main area: RAM stick visualization
-    viz_container = st.empty()
-
+    # Auto-refresh when daemon is running (must be last to avoid skipping controls)
     if daemon_running:
-        # Auto-refresh: render, sleep, rerun for live updates
-        with viz_container.container():
-            render_devices(tracker)
         time.sleep(1.0)
         st.rerun()
-    else:
-        with viz_container.container():
-            render_devices(tracker)
 
 
 if __name__ == "__main__":

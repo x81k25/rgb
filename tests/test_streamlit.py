@@ -14,7 +14,8 @@ def mock_openrgb_for_app():
     mock_client.devices = [mock_device] * 5  # 4 RAM + 1 motherboard
 
     with patch("src.openrgb_control.core.OpenRGBClient", return_value=mock_client), \
-         patch("src.openrgb_control.core.get_client", return_value=mock_client):
+         patch("src.openrgb_control.core.get_client", return_value=mock_client), \
+         patch("src.openrgb_control.ipc.read_state", return_value=None):
         from src.openrgb_control.core import get_client
         get_client._instance = mock_client
         yield mock_client
@@ -24,20 +25,18 @@ def mock_openrgb_for_app():
 class TestAppLoads:
     """Test that the Streamlit app renders without errors."""
 
-    def test_app_renders_title(self, mock_openrgb_for_app):
+    def test_app_renders(self, mock_openrgb_for_app):
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file("app.py", default_timeout=10)
         at.run()
         assert not at.exception, f"App raised: {at.exception}"
-        assert any("RGB Control" in el.value for el in at.title)
 
-    def test_mode_radio_exists(self, mock_openrgb_for_app):
+    def test_mode_selectbox_exists(self, mock_openrgb_for_app):
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file("app.py", default_timeout=10)
         at.run()
         assert not at.exception
-        radios = at.radio
-        assert len(radios) > 0
+        assert len(at.selectbox) > 0
 
     def test_blackout_button_exists(self, mock_openrgb_for_app):
         from streamlit.testing.v1 import AppTest
@@ -73,7 +72,7 @@ class TestAppModes:
         at = AppTest.from_file("app.py", default_timeout=10)
         at.run()
         assert not at.exception
-        theme_select = at.selectbox[0]
+        theme_select = at.selectbox(key="theme_select")
         assert len(theme_select.options) == len(THEMES)
 
     def test_all_effect_categories_have_effects(self, mock_openrgb_for_app):
@@ -81,4 +80,4 @@ class TestAppModes:
         categories = set(info["category"] for info in EFFECTS.values())
         assert "Per Stick" in categories
         assert "Per LED" in categories
-        assert "System Monitor" in categories
+        assert "Metrics" in categories

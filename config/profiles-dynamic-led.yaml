@@ -1,0 +1,20 @@
+# Per-LED dynamic effects — animate individual LEDs independently.
+# class: Python class name in dynamic.py (resolved at load time)
+profiles:
+  heartbeat:
+    description: Stutter pulse expanding from top center per LED
+    class: HeartbeatEffect
+    category: Per LED
+    speed_toggleable: true
+
+  ocean-wave:
+    description: Blue-cyan wave per LED
+    class: OceanWaveEffect
+    category: Per LED
+    speed_toggleable: true
+
+  ocean-breath:
+    description: Gentle ocean breathing gradient
+    class: OceanBreathEffect
+    category: Per LED
+    speed_toggleable: true

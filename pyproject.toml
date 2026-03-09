@@ -18,6 +18,7 @@ dependencies = [
     "openrgb-python>=0.3.3",
     "streamlit>=1.30.0",
     "nvidia-ml-py>=13.590.48",
+    "pyyaml>=6.0.3",
 ]
 keywords = ["rgb", "lighting", "openrgb", "effects"]
 classifiers = [

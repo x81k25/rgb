@@ -1,0 +1,43 @@
+# Static color themes — fully defined, no Python class needed.
+# type: solid (default) or gradient
+profiles:
+  cyan:
+    description: Solid cyan for all devices
+    color: "00FFFF"
+
+  blue:
+    description: Solid blue for all devices
+    color: "0000FF"
+
+  red:
+    description: Solid red for all devices
+    color: "FF0000"
+
+  green:
+    description: Solid green for all devices
+    color: "00FF00"
+
+  white:
+    description: Solid white for all devices
+    color: "FFFFFF"
+
+  status-gradient:
+    description: "Status gradient: cyan (bottom) to red (top)"
+    type: gradient
+    colors:
+      - "00FFFF"   # LED 0 (bottom) - Cyan
+      - "00FFFF"   # LED 1 - Cyan
+      - "00FFAA"   # LED 2 - Cyan-Green
+      - "00FF55"   # LED 3 - Green-Cyan
+      - "00FF00"   # LED 4 - Pure Green
+      - "55FF00"   # LED 5 - Green-Yellow
+      - "AAFF00"   # LED 6 - Yellow-Green
+      - "FFFF00"   # LED 7 - Yellow
+      - "FFCC00"   # LED 8 - Yellow-Orange
+      - "FFAA00"   # LED 9 - Orange
+      - "FF5500"   # LED 10 - Red-Orange
+      - "FF0000"   # LED 11 (top) - Red
+
+  blackout:
+    description: All lights off
+    color: "000000"

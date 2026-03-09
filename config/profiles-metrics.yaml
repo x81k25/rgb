@@ -1,0 +1,62 @@
+# Metrics effects — visualize live system stats on LEDs.
+# class: Python class name in dynamic.py (resolved at load time)
+profiles:
+  cpu:
+    description: CPU usage on all RAM sticks
+    class: CpuUsageEffect
+    category: Metrics
+    speed_toggleable: false
+
+  memory:
+    description: Memory usage on all RAM sticks
+    class: MemoryUsageEffect
+    category: Metrics
+    speed_toggleable: false
+
+  gpu:
+    description: GPU 0 usage on all RAM sticks
+    class: GpuUsageEffect
+    category: Metrics
+    speed_toggleable: false
+
+  gpu1:
+    description: GPU 1 usage on all RAM sticks
+    class: Gpu1UsageEffect
+    category: Metrics
+    speed_toggleable: false
+
+  gpu-vram:
+    description: GPU 0 VRAM usage on all RAM sticks
+    class: GpuVramUsageEffect
+    category: Metrics
+    speed_toggleable: false
+
+  gpu1-vram:
+    description: GPU 1 VRAM usage on all RAM sticks
+    class: Gpu1VramUsageEffect
+    category: Metrics
+    speed_toggleable: false
+
+  system:
+    description: CPU (left) + Memory (right)
+    class: SystemMonitoringEffect
+    category: Metrics
+    speed_toggleable: false
+
+  breathing-metrics:
+    description: Heartbeat overlay on CPU + Memory
+    class: BreathingMetricsEffect
+    category: Metrics
+    speed_toggleable: false
+
+  combo:
+    description: CPU + Memory + GPU 0 + GPU 1 (one per stick)
+    class: ComboMetricsEffect
+    category: Metrics
+    speed_toggleable: false
+
+  metrics-test:
+    description: "Test pattern: 100% / 20% / ramp / random per stick"
+    class: MetricsTestEffect
+    category: Metrics
+    speed_toggleable: false

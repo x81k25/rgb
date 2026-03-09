@@ -1094,19 +1094,17 @@ class ComboMetricsEffect:
     Layout (physical left → right):
       Stick 0 (dev 1): GPU 1 usage (cyan) + VRAM (blue), overlap = white
       Stick 1 (dev 3): GPU 0 usage (cyan) + VRAM (blue), overlap = white
-      Stick 2 (dev 0): Memory — status gradient
-      Stick 3 (dev 2): CPU — status gradient
-      Motherboard:     CPU — status gradient color
+      Stick 2 (dev 0): Memory — blue intensity gradient
+      Stick 3 (dev 2) + Motherboard: CPU — cyan intensity gradient (13-LED)
     """
+
+    _INTENSITY_MAX = 255
+    _INTENSITY_MIN = 26  # ~10%
 
     def __init__(self, update_interval: float = DEFAULT_UPDATE_INTERVAL):
         self.client = _get_client()
         self.tracker = LEDStateTracker()
-        self.gradient = _precompute_gradient()
         self.black = RGBColor(0, 0, 0)
-        self.cyan = (0, 255, 255)
-        self.blue = (0, 0, 255)
-        self.white = (255, 255, 255)
 
         # Device handles by device index
         self._devices = {}
@@ -1121,63 +1119,50 @@ class ComboMetricsEffect:
             mb.set_custom_mode()
 
         # Stick assignment: physical stick → device_index
-        # Physical 0=dev1, 1=dev3, 2=dev0, 3=dev2
         self._cpu_dev = 2       # stick 3 (rightmost)
         self._mem_dev = 0       # stick 2 (second right)
         self._gpu0_dev = 3      # stick 1 (second left)
         self._gpu1_dev = 1      # stick 0 (leftmost)
 
         # CPU stick + motherboard treated as 13-element gradient
-        # (10 visible RAM LEDs + 3 mobo LEDs)
         self._cpu_total_leds = VISIBLE_LEDS_PER_STICK + MOTHERBOARD_VISIBLE_LEDS  # 13
 
         self.cycle_duration = update_interval
 
-    def _build_visible_gradient(self, leds_to_light, visible, num_leds_out):
-        """Build gradient colors for `visible` physical LEDs, padded to `num_leds_out`.
-
-        Maps the 12-entry gradient across `visible` positions. LEDs beyond
-        `visible` are blacked out (ghost entries).
-        """
-        colors = []
-        for led_idx in range(num_leds_out):
-            if led_idx >= visible:
-                colors.append(self.black)
-                continue
-            bottom_up_idx = visible - 1 - led_idx
-            if bottom_up_idx < leds_to_light:
-                grad_idx = int(bottom_up_idx * (len(self.gradient) - 1) / (visible - 1))
-                colors.append(self.gradient[grad_idx])
-            else:
-                colors.append(self.black)
-        return colors
+    def _intensity_for_position(self, bottom_up_idx, leds_to_light):
+        """Compute intensity for a position: top active = MAX, bottom active = MIN."""
+        if leds_to_light <= 1:
+            return self._INTENSITY_MAX
+        t = bottom_up_idx / (leds_to_light - 1)
+        return int(self._INTENSITY_MIN + t * (self._INTENSITY_MAX - self._INTENSITY_MIN))
 
     def _build_gpu_colors(self, usage_pct, vram_pct, num_leds):
         """Build per-LED colors for a GPU stick: cyan=usage, blue=VRAM, white=overlap.
 
-        Calculates bar height against VISIBLE_LEDS_PER_STICK (10) since LEDs 10-11
-        are ghost entries. Ghost LEDs are blacked out.
+        Intensity gradient is based on the taller bar (max of usage/vram LEDs).
         """
         visible = VISIBLE_LEDS_PER_STICK
         usage_leds = _usage_to_leds(usage_pct, visible)
         vram_leds = _usage_to_leds(vram_pct, visible)
+        max_leds = max(usage_leds, vram_leds)
         colors = []
         for led_idx in range(num_leds):
             if led_idx >= visible:
-                colors.append(RGBColor(0, 0, 0))
+                colors.append(self.black)
                 continue
             bottom_up_idx = visible - 1 - led_idx
             has_usage = bottom_up_idx < usage_leds
             has_vram = bottom_up_idx < vram_leds
-            if has_usage and has_vram:
-                r, g, b = self.white
-            elif has_usage:
-                r, g, b = self.cyan
-            elif has_vram:
-                r, g, b = self.blue
+            if has_usage or has_vram:
+                v = self._intensity_for_position(bottom_up_idx, max_leds)
+                if has_usage and has_vram:
+                    colors.append(RGBColor(v, v, v))
+                elif has_usage:
+                    colors.append(RGBColor(0, v, v))
+                else:
+                    colors.append(RGBColor(0, 0, v))
             else:
-                r, g, b = 0, 0, 0
-            colors.append(RGBColor(r, g, b))
+                colors.append(self.black)
         return colors
 
     def step(self):
@@ -1188,40 +1173,36 @@ class ComboMetricsEffect:
         gpu1_usage = get_gpu_usage(1)
         gpu1_vram = get_gpu_vram_usage(1)
 
-        # --- CPU: stick 3 + motherboard as 13-element gradient ---
-        # Positions 0-9 = RAM LEDs 0-9, positions 10-12 = mobo LEDs 0-2
+        # --- CPU: stick 3 + motherboard as 13-element cyan intensity gradient ---
         total = self._cpu_total_leds  # 13
         cpu_leds_to_light = _usage_to_leds(cpu_pct, total)
 
-        # Build full 13-position gradient
         cpu_all_colors = []
         for pos in range(total):
             bottom_up = total - 1 - pos
             if bottom_up < cpu_leds_to_light:
-                grad_idx = int(bottom_up * (len(self.gradient) - 1) / (total - 1))
-                cpu_all_colors.append(self.gradient[grad_idx])
+                v = self._intensity_for_position(bottom_up, cpu_leds_to_light)
+                cpu_all_colors.append(RGBColor(0, v, v))
             else:
                 cpu_all_colors.append(self.black)
 
-        # Apply positions 0-9 to RAM stick, ghost 10-11 blacked out
+        # Positions 0-9 → RAM stick, ghost 10-11 blacked out
         if self._cpu_dev in self._devices:
             dev = self._devices[self._cpu_dev]
             ram_colors = list(cpu_all_colors[:VISIBLE_LEDS_PER_STICK])
-            # Pad ghost LEDs 10-11
             for _ in range(len(dev.leds) - VISIBLE_LEDS_PER_STICK):
                 ram_colors.append(self.black)
             dev.set_colors(ram_colors, fast=True)
             for led_idx, c in enumerate(ram_colors):
                 self.tracker.set_led(self._cpu_dev, led_idx, c.red, c.green, c.blue)
 
-        # Apply positions 10-12 to motherboard (inverted: LED 0 = top = nearest RAM)
+        # Positions 10-12 → motherboard (LED 0 = top = nearest RAM)
         mb = _get_motherboard(self.client)
         if mb:
-            mb_gradient = cpu_all_colors[VISIBLE_LEDS_PER_STICK:]  # 3 colors
+            mb_gradient = cpu_all_colors[VISIBLE_LEDS_PER_STICK:]
             mb_colors = []
             for i in range(len(mb.leds)):
                 if i < MOTHERBOARD_VISIBLE_LEDS:
-                    # MB LED 0 = top (position 10), LED 2 = bottom (position 12)
                     c = mb_gradient[i]
                 else:
                     c = self.black
@@ -1229,11 +1210,23 @@ class ComboMetricsEffect:
                 self.tracker.set_led(MOTHERBOARD_DEVICE_INDEX, i, c.red, c.green, c.blue)
             mb.set_colors(mb_colors, fast=True)
 
-        # --- Memory: stick 2, 10-LED gradient ---
+        # --- Memory: stick 2, blue intensity gradient ---
         if self._mem_dev in self._devices:
             dev = self._devices[self._mem_dev]
-            mem_leds = _usage_to_leds(mem_pct, VISIBLE_LEDS_PER_STICK)
-            colors = self._build_visible_gradient(mem_leds, VISIBLE_LEDS_PER_STICK, len(dev.leds))
+            visible = VISIBLE_LEDS_PER_STICK
+            num_leds = len(dev.leds)
+            mem_leds = _usage_to_leds(mem_pct, visible)
+            colors = []
+            for led_idx in range(num_leds):
+                if led_idx >= visible:
+                    colors.append(self.black)
+                    continue
+                bottom_up = visible - 1 - led_idx
+                if bottom_up < mem_leds:
+                    v = self._intensity_for_position(bottom_up, mem_leds)
+                    colors.append(RGBColor(0, 0, v))
+                else:
+                    colors.append(self.black)
             dev.set_colors(colors, fast=True)
             for led_idx, c in enumerate(colors):
                 self.tracker.set_led(self._mem_dev, led_idx, c.red, c.green, c.blue)
@@ -1241,8 +1234,7 @@ class ComboMetricsEffect:
         # --- GPU 0 stick (cyan/blue/white) ---
         if self._gpu0_dev in self._devices:
             dev = self._devices[self._gpu0_dev]
-            num_leds = len(dev.leds)
-            colors = self._build_gpu_colors(gpu0_usage, gpu0_vram, num_leds)
+            colors = self._build_gpu_colors(gpu0_usage, gpu0_vram, len(dev.leds))
             dev.set_colors(colors, fast=True)
             for led_idx, c in enumerate(colors):
                 self.tracker.set_led(self._gpu0_dev, led_idx, c.red, c.green, c.blue)
@@ -1250,8 +1242,7 @@ class ComboMetricsEffect:
         # --- GPU 1 stick (cyan/blue/white) ---
         if self._gpu1_dev in self._devices:
             dev = self._devices[self._gpu1_dev]
-            num_leds = len(dev.leds)
-            colors = self._build_gpu_colors(gpu1_usage, gpu1_vram, num_leds)
+            colors = self._build_gpu_colors(gpu1_usage, gpu1_vram, len(dev.leds))
             dev.set_colors(colors, fast=True)
             for led_idx, c in enumerate(colors):
                 self.tracker.set_led(self._gpu1_dev, led_idx, c.red, c.green, c.blue)
@@ -1262,29 +1253,234 @@ class ComboMetricsEffect:
         _set_motherboard_color(self.client, 0, 0, 0)
 
 
-# Effect categories
-CATEGORY_PER_STICK = "Per Stick"
-CATEGORY_PER_LED = "Per LED"
-CATEGORY_SYSTEM = "System Monitor"
+class MetricsTestEffect:
+    """Test effect with deterministic per-stick values for visual testing.
 
-# Effect registry for easy lookup
-EFFECTS = {
-    "simple-breathing": {"class": SimpleBreathingEffect, "category": CATEGORY_PER_STICK, "description": "Solid blue fade in/out (all sticks together)"},
-    "breathing":   {"class": BreathingEffect,        "category": CATEGORY_PER_STICK, "description": "Cyan fade rolling L→R across sticks"},
-    "contrast":    {"class": ContrastCycleEffect,     "category": CATEGORY_PER_STICK, "description": "High contrast color cycling"},
-    "rainbow":     {"class": RainbowCycleEffect,      "category": CATEGORY_PER_STICK, "description": "Color spectrum cycle"},
-    "pulse":       {"class": PulseEffect,             "category": CATEGORY_PER_STICK, "description": "Pulsing brightness effect"},
-    "wave":        {"class": WaveEffect,              "category": CATEGORY_PER_STICK, "description": "Color wave across devices"},
-    "heartbeat":   {"class": HeartbeatEffect,          "category": CATEGORY_PER_LED,   "description": "Stutter pulse expanding from top center per LED"},
-    "ocean-wave":  {"class": OceanWaveEffect,         "category": CATEGORY_PER_LED,   "description": "Blue-cyan wave per LED"},
-    "ocean-breath":{"class": OceanBreathEffect,       "category": CATEGORY_PER_LED,   "description": "Gentle ocean breathing gradient"},
-    "cpu":         {"class": CpuUsageEffect,          "category": CATEGORY_SYSTEM,    "description": "CPU usage on all RAM sticks"},
-    "memory":      {"class": MemoryUsageEffect,       "category": CATEGORY_SYSTEM,    "description": "Memory usage on all RAM sticks"},
-    "gpu":         {"class": GpuUsageEffect,           "category": CATEGORY_SYSTEM,    "description": "GPU 0 usage on all RAM sticks"},
-    "gpu1":        {"class": Gpu1UsageEffect,          "category": CATEGORY_SYSTEM,    "description": "GPU 1 usage on all RAM sticks"},
-    "gpu-vram":    {"class": GpuVramUsageEffect,       "category": CATEGORY_SYSTEM,    "description": "GPU 0 VRAM usage on all RAM sticks"},
-    "gpu1-vram":   {"class": Gpu1VramUsageEffect,      "category": CATEGORY_SYSTEM,    "description": "GPU 1 VRAM usage on all RAM sticks"},
-    "system":      {"class": SystemMonitoringEffect,  "category": CATEGORY_SYSTEM,    "description": "CPU (left) + Memory (right)"},
-    "breathing-metrics": {"class": BreathingMetricsEffect, "category": CATEGORY_SYSTEM, "description": "Heartbeat overlay on CPU + Memory"},
-    "combo":       {"class": ComboMetricsEffect,     "category": CATEGORY_SYSTEM,    "description": "CPU + Memory + GPU 0 + GPU 1 (one per stick)"},
+    Stick 0: two-value overlap — value_a=80% (blue), value_b=50% (cyan), overlap=white
+    Stick 1: two-value overlap — value_a=30% (blue), value_b=70% (cyan), overlap=white
+    Stick 2: ramps 0→100% by 10% every second, blue gradient (memory color)
+    Stick 3 + Motherboard: random value every second, unified 13-LED cyan gradient (CPU color)
+    """
+
+    # Intensity gradient: top active = MAX, bottom active = MIN (~10%)
+    _INTENSITY_MAX = 255
+    _INTENSITY_MIN = 26
+
+    def __init__(self):
+        self.client = _get_client()
+        self.tracker = LEDStateTracker()
+        self.black = RGBColor(0, 0, 0)
+        self.cycle_duration = 1.0  # unused but required by daemon
+
+        # Map physical stick positions to devices
+        self._stick_devices = {}
+        for stick_pos, dev_idx in enumerate(RAM_DEVICE_INDICES):
+            if dev_idx < len(self.client.devices):
+                dev = self.client.devices[dev_idx]
+                dev.set_custom_mode()
+                self._stick_devices[stick_pos] = (dev_idx, dev)
+
+        # Motherboard per-LED control
+        mb = _get_motherboard(self.client)
+        if mb:
+            mb.set_custom_mode()
+
+        # Stick 3 + mobo = 13-element unified gradient
+        self._stick3_total_leds = VISIBLE_LEDS_PER_STICK + MOTHERBOARD_VISIBLE_LEDS  # 13
+
+        # Ramp and random state
+        self._ramp_percent = 0.0
+        self._random_percent = random.uniform(0, 100)
+        self._last_tick = time.monotonic()
+
+    def _intensity_for_position(self, bottom_up_idx, leds_to_light):
+        """Compute intensity (0-255) for a position within the active range.
+
+        top active LED = MAX, bottom active LED = MIN (~10%). Single LED = MAX.
+        """
+        if leds_to_light <= 1:
+            return self._INTENSITY_MAX
+        t = bottom_up_idx / (leds_to_light - 1)
+        return int(self._INTENSITY_MIN + t * (self._INTENSITY_MAX - self._INTENSITY_MIN))
+
+    def _apply_blue_gradient(self, dev_idx, device, percent):
+        """Apply blue gradient (0000XX) to a stick, ghost LEDs blacked out."""
+        visible = VISIBLE_LEDS_PER_STICK
+        num_leds = len(device.leds)
+        leds_to_light = _usage_to_leds(percent, visible)
+        colors = []
+        for led_idx in range(num_leds):
+            if led_idx >= visible:
+                colors.append(self.black)
+                continue
+            bottom_up = visible - 1 - led_idx
+            if bottom_up < leds_to_light:
+                v = self._intensity_for_position(bottom_up, leds_to_light)
+                colors.append(RGBColor(0, 0, v))
+            else:
+                colors.append(self.black)
+        device.set_colors(colors, fast=True)
+        for led_idx, c in enumerate(colors):
+            self.tracker.set_led(dev_idx, led_idx, c.red, c.green, c.blue)
+
+    def _apply_overlap_gradient(self, dev_idx, device, pct_a, pct_b):
+        """Two-value overlap: value_a=blue, value_b=cyan, overlap=white.
+
+        Intensity gradient based on the taller bar. Ghost LEDs blacked out.
+        """
+        visible = VISIBLE_LEDS_PER_STICK
+        num_leds = len(device.leds)
+        leds_a = _usage_to_leds(pct_a, visible)
+        leds_b = _usage_to_leds(pct_b, visible)
+        max_leds = max(leds_a, leds_b)
+        colors = []
+        for led_idx in range(num_leds):
+            if led_idx >= visible:
+                colors.append(self.black)
+                continue
+            bottom_up = visible - 1 - led_idx
+            has_a = bottom_up < leds_a
+            has_b = bottom_up < leds_b
+            if has_a or has_b:
+                v = self._intensity_for_position(bottom_up, max_leds)
+                if has_a and has_b:
+                    colors.append(RGBColor(v, v, v))
+                elif has_a:
+                    colors.append(RGBColor(0, 0, v))
+                else:
+                    colors.append(RGBColor(0, v, v))
+            else:
+                colors.append(self.black)
+        device.set_colors(colors, fast=True)
+        for led_idx, c in enumerate(colors):
+            self.tracker.set_led(dev_idx, led_idx, c.red, c.green, c.blue)
+
+    def step(self):
+        now = time.monotonic()
+
+        # Update values every 1 second
+        if now - self._last_tick >= 1.0:
+            self._last_tick = now
+            self._ramp_percent += 10.0
+            if self._ramp_percent > 100.0:
+                self._ramp_percent = 0.0
+            self._random_percent = random.uniform(0, 100)
+
+        # Stick 0: two-value overlap (blue=80%, cyan=50%)
+        if 0 in self._stick_devices:
+            dev_idx, device = self._stick_devices[0]
+            self._apply_overlap_gradient(dev_idx, device, 80.0, 50.0)
+
+        # Stick 1: two-value overlap (blue=30%, cyan=70%)
+        if 1 in self._stick_devices:
+            dev_idx, device = self._stick_devices[1]
+            self._apply_overlap_gradient(dev_idx, device, 30.0, 70.0)
+
+        # Stick 2: blue ramp (memory color)
+        if 2 in self._stick_devices:
+            dev_idx, device = self._stick_devices[2]
+            self._apply_blue_gradient(dev_idx, device, self._ramp_percent)
+
+        # Stick 3 + motherboard: unified 13-LED cyan gradient (CPU color)
+        total = self._stick3_total_leds  # 13
+        leds_to_light = _usage_to_leds(self._random_percent, total)
+
+        # Build full 13-position cyan gradient
+        all_colors = []
+        for pos in range(total):
+            bottom_up = total - 1 - pos
+            if bottom_up < leds_to_light:
+                v = self._intensity_for_position(bottom_up, leds_to_light)
+                all_colors.append(RGBColor(0, v, v))
+            else:
+                all_colors.append(self.black)
+
+        # Positions 0-9 → RAM stick 3, ghost LEDs 10-11 blacked out
+        if 3 in self._stick_devices:
+            dev_idx, device = self._stick_devices[3]
+            ram_colors = list(all_colors[:VISIBLE_LEDS_PER_STICK])
+            for _ in range(len(device.leds) - VISIBLE_LEDS_PER_STICK):
+                ram_colors.append(self.black)
+            device.set_colors(ram_colors, fast=True)
+            for led_idx, c in enumerate(ram_colors):
+                self.tracker.set_led(dev_idx, led_idx, c.red, c.green, c.blue)
+
+        # Positions 10-12 → motherboard (LED 0 = top = nearest RAM)
+        mb = _get_motherboard(self.client)
+        if mb:
+            mb_gradient = all_colors[VISIBLE_LEDS_PER_STICK:]
+            mb_colors = []
+            for i in range(len(mb.leds)):
+                if i < MOTHERBOARD_VISIBLE_LEDS:
+                    c = mb_gradient[i]
+                else:
+                    c = self.black
+                mb_colors.append(c)
+                self.tracker.set_led(MOTHERBOARD_DEVICE_INDEX, i, c.red, c.green, c.blue)
+            mb.set_colors(mb_colors, fast=True)
+
+    def cleanup(self):
+        for dev_idx, device in self._stick_devices.values():
+            device.set_color(self.black, fast=True)
+        _set_motherboard_color(self.client, 0, 0, 0)
+
+
+# Map of class name strings to actual classes (for YAML resolution)
+_EFFECT_CLASSES = {
+    "SimpleBreathingEffect": SimpleBreathingEffect,
+    "BreathingEffect": BreathingEffect,
+    "ContrastCycleEffect": ContrastCycleEffect,
+    "RainbowCycleEffect": RainbowCycleEffect,
+    "PulseEffect": PulseEffect,
+    "WaveEffect": WaveEffect,
+    "HeartbeatEffect": HeartbeatEffect,
+    "OceanWaveEffect": OceanWaveEffect,
+    "OceanBreathEffect": OceanBreathEffect,
+    "CpuUsageEffect": CpuUsageEffect,
+    "MemoryUsageEffect": MemoryUsageEffect,
+    "GpuUsageEffect": GpuUsageEffect,
+    "Gpu1UsageEffect": Gpu1UsageEffect,
+    "GpuVramUsageEffect": GpuVramUsageEffect,
+    "Gpu1VramUsageEffect": Gpu1VramUsageEffect,
+    "SystemMonitoringEffect": SystemMonitoringEffect,
+    "BreathingMetricsEffect": BreathingMetricsEffect,
+    "ComboMetricsEffect": ComboMetricsEffect,
+    "MetricsTestEffect": MetricsTestEffect,
 }
+
+
+def _load_effects() -> dict:
+    """Load dynamic effect definitions from config/ YAML files and resolve class references."""
+    import os
+    import yaml
+    # Project root is 3 levels up: dynamic/ -> openrgb_control/ -> src/ -> rgb/
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    config_dir = os.path.join(project_root, "config")
+
+    yaml_files = [
+        "profiles-dynamic-stick.yaml",
+        "profiles-dynamic-led.yaml",
+        "profiles-metrics.yaml",
+    ]
+
+    effects = {}
+    for filename in yaml_files:
+        yaml_path = os.path.join(config_dir, filename)
+        with open(yaml_path, "r") as f:
+            data = yaml.safe_load(f)
+        for name, info in data.get("profiles", {}).items():
+            class_name = info["class"]
+            cls = _EFFECT_CLASSES.get(class_name)
+            if cls is None:
+                logger.warning(f"Unknown effect class '{class_name}' for profile '{name}', skipping")
+                continue
+            effects[name] = {
+                "class": cls,
+                "category": info["category"],
+                "description": info["description"],
+                "speed_toggleable": info.get("speed_toggleable", True),
+            }
+    return effects
+
+
+EFFECTS = _load_effects()
