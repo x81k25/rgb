@@ -63,6 +63,22 @@ class LEDStateTracker:
         """Get LED states for a specific device."""
         return self._state.get(device_index, {})
 
+    def to_dict(self) -> Dict[str, Dict[str, list]]:
+        """Serialize state to JSON-safe dict: {dev_idx: {led_idx: [r,g,b]}}."""
+        return {
+            str(dev): {str(led): list(rgb) for led, rgb in leds.items()}
+            for dev, leds in self._state.items()
+        }
+
+    def from_dict(self, data: Dict[str, Dict[str, list]]):
+        """Populate state from a dict produced by to_dict()."""
+        self._state.clear()
+        for dev_str, leds in data.items():
+            dev_idx = int(dev_str)
+            self._state[dev_idx] = {}
+            for led_str, rgb in leds.items():
+                self._state[dev_idx][int(led_str)] = tuple(rgb)
+
 
 def get_client(host: str = SERVER_HOST, port: int = SERVER_PORT) -> 'OpenRGBClient':
     """Get a shared OpenRGB client connection (singleton).

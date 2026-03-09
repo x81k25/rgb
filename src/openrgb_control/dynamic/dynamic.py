@@ -17,7 +17,7 @@ import time
 from typing import List, Optional
 
 from ..core import LEDStateTracker, get_client, hex_to_rgb
-from ..monitoring import get_memory_usage, get_cpu_usage
+from ..monitoring import get_memory_usage, get_cpu_usage, get_gpu_usage, get_gpu_vram_usage
 from ..config import (
     SERVER_HOST,
     SERVER_PORT,
@@ -29,6 +29,7 @@ from ..config import (
     MOTHERBOARD_DEVICE_INDEX,
     MOTHERBOARD_VISIBLE_LEDS,
     LEDS_PER_RAM_STICK,
+    VISIBLE_LEDS_PER_STICK,
     DEFAULT_BREATHING_DURATION,
     DEFAULT_UPDATE_INTERVAL,
     CPU_SAMPLE_INTERVAL,
@@ -408,6 +409,134 @@ class MemoryUsageEffect:
     def step(self):
         memory_percent, _, _ = get_memory_usage()
         leds_to_light = _usage_to_leds(memory_percent)
+        for dev_idx, device in self.ram_devices:
+            _apply_gradient_to_device(device, dev_idx, leds_to_light, self.gradient, self.black)
+        if leds_to_light > 0:
+            grad_idx = min(leds_to_light - 1, len(self.gradient) - 1)
+            c = self.gradient[grad_idx]
+            _set_motherboard_color(self.client, c.red, c.green, c.blue)
+        else:
+            _set_motherboard_color(self.client, 0, 0, 0)
+
+    def cleanup(self):
+        for dev_idx, device in self.ram_devices:
+            device.set_color(self.black, fast=True)
+        _set_motherboard_color(self.client, 0, 0, 0)
+
+
+class GpuUsageEffect:
+    """Display GPU 0 usage as LED gradient on all RAM sticks."""
+
+    def __init__(self, update_interval: float = DEFAULT_UPDATE_INTERVAL):
+        self.client = _get_client()
+        self.tracker = LEDStateTracker()
+        self.gradient = _precompute_gradient()
+        self.black = RGBColor(0, 0, 0)
+        self.ram_devices = [(i, self.client.devices[i]) for i in RAM_DEVICE_INDICES
+                            if i < len(self.client.devices)]
+        for _, device in self.ram_devices:
+            device.set_custom_mode()
+        self.cycle_duration = update_interval
+
+    def step(self):
+        gpu_percent = get_gpu_usage(0)
+        leds_to_light = _usage_to_leds(gpu_percent)
+        for dev_idx, device in self.ram_devices:
+            _apply_gradient_to_device(device, dev_idx, leds_to_light, self.gradient, self.black)
+        if leds_to_light > 0:
+            grad_idx = min(leds_to_light - 1, len(self.gradient) - 1)
+            c = self.gradient[grad_idx]
+            _set_motherboard_color(self.client, c.red, c.green, c.blue)
+        else:
+            _set_motherboard_color(self.client, 0, 0, 0)
+
+    def cleanup(self):
+        for dev_idx, device in self.ram_devices:
+            device.set_color(self.black, fast=True)
+        _set_motherboard_color(self.client, 0, 0, 0)
+
+
+class Gpu1UsageEffect:
+    """Display GPU 1 usage as LED gradient on all RAM sticks."""
+
+    def __init__(self, update_interval: float = DEFAULT_UPDATE_INTERVAL):
+        self.client = _get_client()
+        self.tracker = LEDStateTracker()
+        self.gradient = _precompute_gradient()
+        self.black = RGBColor(0, 0, 0)
+        self.ram_devices = [(i, self.client.devices[i]) for i in RAM_DEVICE_INDICES
+                            if i < len(self.client.devices)]
+        for _, device in self.ram_devices:
+            device.set_custom_mode()
+        self.cycle_duration = update_interval
+
+    def step(self):
+        gpu_percent = get_gpu_usage(1)
+        leds_to_light = _usage_to_leds(gpu_percent)
+        for dev_idx, device in self.ram_devices:
+            _apply_gradient_to_device(device, dev_idx, leds_to_light, self.gradient, self.black)
+        if leds_to_light > 0:
+            grad_idx = min(leds_to_light - 1, len(self.gradient) - 1)
+            c = self.gradient[grad_idx]
+            _set_motherboard_color(self.client, c.red, c.green, c.blue)
+        else:
+            _set_motherboard_color(self.client, 0, 0, 0)
+
+    def cleanup(self):
+        for dev_idx, device in self.ram_devices:
+            device.set_color(self.black, fast=True)
+        _set_motherboard_color(self.client, 0, 0, 0)
+
+
+class GpuVramUsageEffect:
+    """Display GPU 0 VRAM usage as LED gradient on all RAM sticks."""
+
+    def __init__(self, update_interval: float = DEFAULT_UPDATE_INTERVAL):
+        self.client = _get_client()
+        self.tracker = LEDStateTracker()
+        self.gradient = _precompute_gradient()
+        self.black = RGBColor(0, 0, 0)
+        self.ram_devices = [(i, self.client.devices[i]) for i in RAM_DEVICE_INDICES
+                            if i < len(self.client.devices)]
+        for _, device in self.ram_devices:
+            device.set_custom_mode()
+        self.cycle_duration = update_interval
+
+    def step(self):
+        vram_percent = get_gpu_vram_usage(0)
+        leds_to_light = _usage_to_leds(vram_percent)
+        for dev_idx, device in self.ram_devices:
+            _apply_gradient_to_device(device, dev_idx, leds_to_light, self.gradient, self.black)
+        if leds_to_light > 0:
+            grad_idx = min(leds_to_light - 1, len(self.gradient) - 1)
+            c = self.gradient[grad_idx]
+            _set_motherboard_color(self.client, c.red, c.green, c.blue)
+        else:
+            _set_motherboard_color(self.client, 0, 0, 0)
+
+    def cleanup(self):
+        for dev_idx, device in self.ram_devices:
+            device.set_color(self.black, fast=True)
+        _set_motherboard_color(self.client, 0, 0, 0)
+
+
+class Gpu1VramUsageEffect:
+    """Display GPU 1 VRAM usage as LED gradient on all RAM sticks."""
+
+    def __init__(self, update_interval: float = DEFAULT_UPDATE_INTERVAL):
+        self.client = _get_client()
+        self.tracker = LEDStateTracker()
+        self.gradient = _precompute_gradient()
+        self.black = RGBColor(0, 0, 0)
+        self.ram_devices = [(i, self.client.devices[i]) for i in RAM_DEVICE_INDICES
+                            if i < len(self.client.devices)]
+        for _, device in self.ram_devices:
+            device.set_custom_mode()
+        self.cycle_duration = update_interval
+
+    def step(self):
+        vram_percent = get_gpu_vram_usage(1)
+        leds_to_light = _usage_to_leds(vram_percent)
         for dev_idx, device in self.ram_devices:
             _apply_gradient_to_device(device, dev_idx, leds_to_light, self.gradient, self.black)
         if leds_to_light > 0:
@@ -959,6 +1088,180 @@ class OceanBreathEffect:
         _set_motherboard_color(self.client, 0, 0, 0)
 
 
+class ComboMetricsEffect:
+    """All-in-one system monitor — one metric per stick.
+
+    Layout (physical left → right):
+      Stick 0 (dev 1): GPU 1 usage (cyan) + VRAM (blue), overlap = white
+      Stick 1 (dev 3): GPU 0 usage (cyan) + VRAM (blue), overlap = white
+      Stick 2 (dev 0): Memory — status gradient
+      Stick 3 (dev 2): CPU — status gradient
+      Motherboard:     CPU — status gradient color
+    """
+
+    def __init__(self, update_interval: float = DEFAULT_UPDATE_INTERVAL):
+        self.client = _get_client()
+        self.tracker = LEDStateTracker()
+        self.gradient = _precompute_gradient()
+        self.black = RGBColor(0, 0, 0)
+        self.cyan = (0, 255, 255)
+        self.blue = (0, 0, 255)
+        self.white = (255, 255, 255)
+
+        # Device handles by device index
+        self._devices = {}
+        for i in RAM_DEVICE_INDICES:
+            if i < len(self.client.devices):
+                self._devices[i] = self.client.devices[i]
+                self._devices[i].set_custom_mode()
+
+        # Motherboard per-LED control
+        mb = _get_motherboard(self.client)
+        if mb:
+            mb.set_custom_mode()
+
+        # Stick assignment: physical stick → device_index
+        # Physical 0=dev1, 1=dev3, 2=dev0, 3=dev2
+        self._cpu_dev = 2       # stick 3 (rightmost)
+        self._mem_dev = 0       # stick 2 (second right)
+        self._gpu0_dev = 3      # stick 1 (second left)
+        self._gpu1_dev = 1      # stick 0 (leftmost)
+
+        # CPU stick + motherboard treated as 13-element gradient
+        # (10 visible RAM LEDs + 3 mobo LEDs)
+        self._cpu_total_leds = VISIBLE_LEDS_PER_STICK + MOTHERBOARD_VISIBLE_LEDS  # 13
+
+        self.cycle_duration = update_interval
+
+    def _build_visible_gradient(self, leds_to_light, visible, num_leds_out):
+        """Build gradient colors for `visible` physical LEDs, padded to `num_leds_out`.
+
+        Maps the 12-entry gradient across `visible` positions. LEDs beyond
+        `visible` are blacked out (ghost entries).
+        """
+        colors = []
+        for led_idx in range(num_leds_out):
+            if led_idx >= visible:
+                colors.append(self.black)
+                continue
+            bottom_up_idx = visible - 1 - led_idx
+            if bottom_up_idx < leds_to_light:
+                grad_idx = int(bottom_up_idx * (len(self.gradient) - 1) / (visible - 1))
+                colors.append(self.gradient[grad_idx])
+            else:
+                colors.append(self.black)
+        return colors
+
+    def _build_gpu_colors(self, usage_pct, vram_pct, num_leds):
+        """Build per-LED colors for a GPU stick: cyan=usage, blue=VRAM, white=overlap.
+
+        Calculates bar height against VISIBLE_LEDS_PER_STICK (10) since LEDs 10-11
+        are ghost entries. Ghost LEDs are blacked out.
+        """
+        visible = VISIBLE_LEDS_PER_STICK
+        usage_leds = _usage_to_leds(usage_pct, visible)
+        vram_leds = _usage_to_leds(vram_pct, visible)
+        colors = []
+        for led_idx in range(num_leds):
+            if led_idx >= visible:
+                colors.append(RGBColor(0, 0, 0))
+                continue
+            bottom_up_idx = visible - 1 - led_idx
+            has_usage = bottom_up_idx < usage_leds
+            has_vram = bottom_up_idx < vram_leds
+            if has_usage and has_vram:
+                r, g, b = self.white
+            elif has_usage:
+                r, g, b = self.cyan
+            elif has_vram:
+                r, g, b = self.blue
+            else:
+                r, g, b = 0, 0, 0
+            colors.append(RGBColor(r, g, b))
+        return colors
+
+    def step(self):
+        cpu_pct = get_cpu_usage(CPU_SAMPLE_INTERVAL)
+        mem_pct, _, _ = get_memory_usage()
+        gpu0_usage = get_gpu_usage(0)
+        gpu0_vram = get_gpu_vram_usage(0)
+        gpu1_usage = get_gpu_usage(1)
+        gpu1_vram = get_gpu_vram_usage(1)
+
+        # --- CPU: stick 3 + motherboard as 13-element gradient ---
+        # Positions 0-9 = RAM LEDs 0-9, positions 10-12 = mobo LEDs 0-2
+        total = self._cpu_total_leds  # 13
+        cpu_leds_to_light = _usage_to_leds(cpu_pct, total)
+
+        # Build full 13-position gradient
+        cpu_all_colors = []
+        for pos in range(total):
+            bottom_up = total - 1 - pos
+            if bottom_up < cpu_leds_to_light:
+                grad_idx = int(bottom_up * (len(self.gradient) - 1) / (total - 1))
+                cpu_all_colors.append(self.gradient[grad_idx])
+            else:
+                cpu_all_colors.append(self.black)
+
+        # Apply positions 0-9 to RAM stick, ghost 10-11 blacked out
+        if self._cpu_dev in self._devices:
+            dev = self._devices[self._cpu_dev]
+            ram_colors = list(cpu_all_colors[:VISIBLE_LEDS_PER_STICK])
+            # Pad ghost LEDs 10-11
+            for _ in range(len(dev.leds) - VISIBLE_LEDS_PER_STICK):
+                ram_colors.append(self.black)
+            dev.set_colors(ram_colors, fast=True)
+            for led_idx, c in enumerate(ram_colors):
+                self.tracker.set_led(self._cpu_dev, led_idx, c.red, c.green, c.blue)
+
+        # Apply positions 10-12 to motherboard (inverted: LED 0 = top = nearest RAM)
+        mb = _get_motherboard(self.client)
+        if mb:
+            mb_gradient = cpu_all_colors[VISIBLE_LEDS_PER_STICK:]  # 3 colors
+            mb_colors = []
+            for i in range(len(mb.leds)):
+                if i < MOTHERBOARD_VISIBLE_LEDS:
+                    # MB LED 0 = top (position 10), LED 2 = bottom (position 12)
+                    c = mb_gradient[i]
+                else:
+                    c = self.black
+                mb_colors.append(c)
+                self.tracker.set_led(MOTHERBOARD_DEVICE_INDEX, i, c.red, c.green, c.blue)
+            mb.set_colors(mb_colors, fast=True)
+
+        # --- Memory: stick 2, 10-LED gradient ---
+        if self._mem_dev in self._devices:
+            dev = self._devices[self._mem_dev]
+            mem_leds = _usage_to_leds(mem_pct, VISIBLE_LEDS_PER_STICK)
+            colors = self._build_visible_gradient(mem_leds, VISIBLE_LEDS_PER_STICK, len(dev.leds))
+            dev.set_colors(colors, fast=True)
+            for led_idx, c in enumerate(colors):
+                self.tracker.set_led(self._mem_dev, led_idx, c.red, c.green, c.blue)
+
+        # --- GPU 0 stick (cyan/blue/white) ---
+        if self._gpu0_dev in self._devices:
+            dev = self._devices[self._gpu0_dev]
+            num_leds = len(dev.leds)
+            colors = self._build_gpu_colors(gpu0_usage, gpu0_vram, num_leds)
+            dev.set_colors(colors, fast=True)
+            for led_idx, c in enumerate(colors):
+                self.tracker.set_led(self._gpu0_dev, led_idx, c.red, c.green, c.blue)
+
+        # --- GPU 1 stick (cyan/blue/white) ---
+        if self._gpu1_dev in self._devices:
+            dev = self._devices[self._gpu1_dev]
+            num_leds = len(dev.leds)
+            colors = self._build_gpu_colors(gpu1_usage, gpu1_vram, num_leds)
+            dev.set_colors(colors, fast=True)
+            for led_idx, c in enumerate(colors):
+                self.tracker.set_led(self._gpu1_dev, led_idx, c.red, c.green, c.blue)
+
+    def cleanup(self):
+        for dev_idx, device in self._devices.items():
+            device.set_color(self.black, fast=True)
+        _set_motherboard_color(self.client, 0, 0, 0)
+
+
 # Effect categories
 CATEGORY_PER_STICK = "Per Stick"
 CATEGORY_PER_LED = "Per LED"
@@ -977,6 +1280,11 @@ EFFECTS = {
     "ocean-breath":{"class": OceanBreathEffect,       "category": CATEGORY_PER_LED,   "description": "Gentle ocean breathing gradient"},
     "cpu":         {"class": CpuUsageEffect,          "category": CATEGORY_SYSTEM,    "description": "CPU usage on all RAM sticks"},
     "memory":      {"class": MemoryUsageEffect,       "category": CATEGORY_SYSTEM,    "description": "Memory usage on all RAM sticks"},
+    "gpu":         {"class": GpuUsageEffect,           "category": CATEGORY_SYSTEM,    "description": "GPU 0 usage on all RAM sticks"},
+    "gpu1":        {"class": Gpu1UsageEffect,          "category": CATEGORY_SYSTEM,    "description": "GPU 1 usage on all RAM sticks"},
+    "gpu-vram":    {"class": GpuVramUsageEffect,       "category": CATEGORY_SYSTEM,    "description": "GPU 0 VRAM usage on all RAM sticks"},
+    "gpu1-vram":   {"class": Gpu1VramUsageEffect,      "category": CATEGORY_SYSTEM,    "description": "GPU 1 VRAM usage on all RAM sticks"},
     "system":      {"class": SystemMonitoringEffect,  "category": CATEGORY_SYSTEM,    "description": "CPU (left) + Memory (right)"},
     "breathing-metrics": {"class": BreathingMetricsEffect, "category": CATEGORY_SYSTEM, "description": "Heartbeat overlay on CPU + Memory"},
+    "combo":       {"class": ComboMetricsEffect,     "category": CATEGORY_SYSTEM,    "description": "CPU + Memory + GPU 0 + GPU 1 (one per stick)"},
 }

@@ -1,4 +1,7 @@
-"""Streamlit UI for RGB lighting control."""
+"""Streamlit UI for RGB lighting control.
+
+Sends commands to the RGB daemon via IPC and displays LED state.
+"""
 
 import importlib
 import time
@@ -10,6 +13,7 @@ import src.openrgb_control.static.static
 import src.openrgb_control.config
 
 from src.openrgb_control import LEDStateTracker
+from src.openrgb_control import ipc
 from src.openrgb_control.config import (
     LEDS_PER_RAM_STICK, DEVICE_MAPPING,
     MOTHERBOARD_DEVICE_INDEX, MOTHERBOARD_VISIBLE_LEDS,
@@ -29,9 +33,6 @@ def _load_profiles():
     importlib.reload(src.openrgb_control)
 
     from src.openrgb_control import THEMES, EFFECTS
-    from src.openrgb_control.static.static import apply_theme as _apply_theme
-    global apply_theme
-    apply_theme = _apply_theme
     effect_categories = {}
     for name, info in EFFECTS.items():
         cat = info["category"]
@@ -42,7 +43,7 @@ def _load_profiles():
 
 
 def _reload_globals():
-    global THEMES, EFFECTS, EFFECT_CATEGORIES, apply_theme
+    global THEMES, EFFECTS, EFFECT_CATEGORIES
     THEMES, EFFECTS, EFFECT_CATEGORIES = _load_profiles()
 
 _reload_globals()
@@ -63,10 +64,7 @@ def _render_led_block(label: str, r: int, g: int, b: int):
 
 
 def render_devices(tracker: LEDStateTracker):
-    """Render the 4 RAM sticks and motherboard as colored LED columns.
-
-    Motherboard LEDs are shown below Stick 3 as a physical extension.
-    """
+    """Render the 4 RAM sticks and motherboard as colored LED columns."""
     cols = st.columns([1, 1, 1, 1], gap="large")
 
     mb_leds = tracker.get_device_leds(MOTHERBOARD_DEVICE_INDEX)
@@ -89,14 +87,45 @@ def render_devices(tracker: LEDStateTracker):
                     _render_led_block(f"MB {led_idx}", r, g, b)
 
 
+def _get_daemon_state():
+    """Read daemon state and determine if an effect is running."""
+    state = ipc.read_state()
+    if state is None:
+        return "offline", "", 0.0, {}
+    return (
+        state.get("status", "idle"),
+        state.get("effect_name", ""),
+        state.get("speed", 0.0),
+        state.get("leds", {}),
+    )
+
+
 def main():
     st.title("RGB Control")
 
     tracker = LEDStateTracker()
 
+    # Read daemon state
+    daemon_status, daemon_effect, daemon_speed, daemon_leds = _get_daemon_state()
+    daemon_running = daemon_status == "running"
+
+    # Populate tracker from daemon's LED state
+    if daemon_leds:
+        tracker.from_dict(daemon_leds)
+
     # Sidebar controls
     with st.sidebar:
         st.header("Controls")
+
+        # Daemon status indicator
+        if daemon_status == "offline":
+            st.warning("Daemon: offline")
+        elif daemon_status == "running":
+            st.success(f"Daemon: running — {daemon_effect}")
+        elif daemon_status == "stopped":
+            st.info("Daemon: stopped")
+        else:
+            st.info(f"Daemon: {daemon_status}")
 
         mode = st.radio("Mode", ["Static", "Per Stick", "Per LED", "System Monitor"])
 
@@ -110,11 +139,10 @@ def main():
             )
 
             if st.button("Apply Theme", type="primary"):
-                try:
-                    apply_theme(selected_theme)
-                    st.success(f"Applied: {selected_theme}")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                ipc.write_command("apply_theme", name=selected_theme)
+                st.success(f"Sent: apply {selected_theme}")
+                time.sleep(0.5)
+                st.rerun()
 
         elif mode in EFFECT_CATEGORIES:
             category_effects = EFFECT_CATEGORIES[mode]
@@ -136,19 +164,16 @@ def main():
             speed = st.slider("Speed", 0.1, 20.0, 4.0, 0.1,
                               help="Animation cycle duration in seconds (lower = faster)")
 
-            if "running" not in st.session_state:
-                st.session_state.running = False
-
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("Start", type="primary", disabled=st.session_state.running):
-                    st.session_state.running = True
-                    st.session_state.effect_name = selected_effect
-                    st.session_state.effect_speed = speed
+                if st.button("Start", type="primary", disabled=daemon_running):
+                    ipc.write_command("start_effect", name=selected_effect, speed=speed)
+                    time.sleep(0.5)
                     st.rerun()
             with col2:
-                if st.button("Stop", disabled=not st.session_state.running):
-                    st.session_state.running = False
+                if st.button("Stop", disabled=not daemon_running):
+                    ipc.write_command("stop")
+                    time.sleep(0.5)
                     st.rerun()
 
         st.divider()
@@ -158,45 +183,20 @@ def main():
             st.rerun()
 
         if st.button("Blackout"):
-            try:
-                apply_theme("blackout")
-                st.session_state.running = False
-                st.success("All lights off")
-            except Exception as e:
-                st.error(f"Error: {e}")
+            ipc.write_command("blackout")
+            st.success("Sent: blackout")
+            time.sleep(0.5)
+            st.rerun()
 
     # Main area: RAM stick visualization
     viz_container = st.empty()
 
-    if st.session_state.get("running"):
-        effect_cls = EFFECTS[st.session_state.effect_name]["class"]
-        try:
-            effect = effect_cls()
-            effect.cycle_duration = st.session_state.effect_speed
-
-            # UI refresh is slow (~100ms); update hardware every frame,
-            # but only redraw the visualization periodically
-            UI_REFRESH_INTERVAL = 0.25  # seconds between UI redraws
-            last_ui_update = 0
-
-            while st.session_state.get("running"):
-                effect.step()
-                now = time.time()
-                if now - last_ui_update >= UI_REFRESH_INTERVAL:
-                    with viz_container.container():
-                        render_devices(tracker)
-                    last_ui_update = now
-                time.sleep(0.005)  # ~200 FPS max, hardware can handle it
-
-        except Exception as e:
-            st.error(f"Effect error: {e}")
-            st.session_state.running = False
-        finally:
-            if 'effect' in dir():
-                try:
-                    effect.cleanup()
-                except Exception:
-                    pass
+    if daemon_running:
+        # Auto-refresh: render, sleep, rerun for live updates
+        with viz_container.container():
+            render_devices(tracker)
+        time.sleep(1.0)
+        st.rerun()
     else:
         with viz_container.container():
             render_devices(tracker)

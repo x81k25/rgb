@@ -34,7 +34,8 @@ CPU_DEVICE_INDICES = [0, 2]     # Sticks 2-3 (right side)
 MEMORY_DEVICE_INDICES = [1, 3]  # Sticks 0-1 (left side)
 
 # LED counts per device type
-LEDS_PER_RAM_STICK = 12
+LEDS_PER_RAM_STICK = 12      # OpenRGB reports 12
+VISIBLE_LEDS_PER_STICK = 10  # LEDs 0-9 are physical; 10-11 are ghost entries
 
 # Status gradient colors (cyan->green->yellow->orange->red, bottom to top)
 # Used for CPU/memory usage visualization

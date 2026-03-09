@@ -6,7 +6,7 @@
 - **Type**: DDR4 RGB memory modules (CMH128GX4M4E3200C16)
 - **Bus**: I2C (i2c-0)
 - **I2C Addresses**: 0x58, 0x59, 0x5a, 0x5b
-- **LEDs per stick**: 12
+- **LEDs per stick**: 12 reported by OpenRGB, **10 physical** (LEDs 0-9 visible; 10-11 are phantom/ghost entries with no hardware)
 - **OpenRGB device indices**: 0, 1, 2, 3
 
 #### Physical Position Mapping (Left to Right)

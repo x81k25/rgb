@@ -1,7 +1,7 @@
 [Unit]
 Description=RGB Control Streamlit App
-After=network.target openrgb-server.service
-Requires=openrgb-server.service
+After=network.target rgb-daemon.service
+Requires=rgb-daemon.service
 
 [Service]
 Type=simple
